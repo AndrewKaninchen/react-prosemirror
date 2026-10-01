@@ -1,5 +1,13 @@
 # Progressive mounting experiment
 
+For a manual playground, run `node scripts/serve-progressive-demo.mjs` and open
+`http://127.0.0.1:4180/demo/progressive-mount.html`. It serves a production
+build with document-size, batch-size, mount-cost, shape and read-only controls.
+The JavaScript pulse, input and click counter remain outside the editor so you
+can test app responsiveness during loading. You can also run
+`corepack yarn demo` and open `/demo/progressive-mount.html` on the development
+server.
+
 The goal is to reduce the longest main-thread pause while mounting a document.
 It does not reduce the amount of React component work or virtualize the editor.
 The implementation keeps the original EditorState and mounts its DOM in batches

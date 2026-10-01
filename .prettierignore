@@ -9,3 +9,4 @@
 .devenv
 # Production output from the progressive mounting benchmark
 /.benchmark-dist/
+/.progressive-demo-dist/

@@ -552,6 +552,11 @@ export function ProseMirrorEditor() {
 
 #### Progressive initial mounting
 
+Try the manual playground with `corepack yarn demo:progressive`, then open
+`http://127.0.0.1:4180/demo/progressive-mount.html`. It lets you compare modes,
+configure document size and mount cost, and test app responsiveness while
+loading.
+
 Large documents can opt into mounting their React node views over multiple
 animation frames:
 

@@ -39,6 +39,7 @@
     "check": "concurrently -P 'npm:check:* {@}' --",
     "clean": "rimraf \"./dist/!(cjs/package.json)\"",
     "demo": "yarn vite",
+    "demo:progressive": "node scripts/serve-progressive-demo.mjs",
     "demo:build": "yarn vite build --outDir docs --base=/react-prosemirror/",
     "dev": "yarn build -- --watch",
     "fix:format": "prettier --write .",
