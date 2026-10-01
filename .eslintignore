@@ -5,3 +5,5 @@
 .pnp.*
 
 /docs/
+/.benchmark-dist/
+/.progressive-demo-dist/

@@ -13,6 +13,10 @@ import { useClientLayoutEffect } from "./useClientLayoutEffect.js";
 import { useComponentEventListeners } from "./useComponentEventListeners.js";
 import { useEffectEvent } from "./useEffectEvent.js";
 import { useForceUpdate } from "./useForceUpdate.js";
+import {
+  ProgressiveMountOptions,
+  useProgressiveMount,
+} from "./useProgressiveMount.js";
 
 export interface UseEditorOptions extends EditorProps {
   defaultState?: EditorState;
@@ -20,6 +24,7 @@ export interface UseEditorOptions extends EditorProps {
   plugins?: readonly Plugin[];
   dispatchTransaction?(this: EditorView, tr: Transaction): void;
   static?: boolean;
+  progressiveMount?: ProgressiveMountOptions;
 }
 
 let didWarnValueDefaultValue = false;
@@ -60,6 +65,12 @@ export function useEditor<T extends HTMLElement = HTMLElement>(
   const defaultState = options.defaultState ?? EMPTY_STATE;
   const [_state, setState] = useState<EditorState>(defaultState);
   const state = options.state ?? _state;
+  const { mountedChildCount, isMounting } = useProgressiveMount(
+    state.doc,
+    options.progressiveMount,
+    options.static ?? false,
+    mount !== null
+  );
 
   const { handleDOMEvents, registerEventListener, unregisterEventListener } =
     useComponentEventListeners(options.handleDOMEvents);
@@ -109,7 +120,11 @@ export function useEditor<T extends HTMLElement = HTMLElement>(
 
   const createEditorView = useEffectEvent((mount: T | null) => {
     if (mount && !options.static) {
-      const view = new ReactEditorView({ mount }, directEditorProps);
+      const view = new ReactEditorView(
+        { mount },
+        directEditorProps,
+        isMounting
+      );
       view.dom.addEventListener("compositionend", forceUpdate);
       return view;
     }
@@ -127,11 +142,15 @@ export function useEditor<T extends HTMLElement = HTMLElement>(
   }, [createEditorView, mount]);
 
   useClientLayoutEffect(() => {
+    // Event guards follow the committed DOM, not a concurrent render that may
+    // yield while the final batch is still incomplete.
+    if (view instanceof ReactEditorView) view.mounting = isMounting;
     // Ensure that the EditorView hasn't been destroyed before
     // running effects. Running effects will reattach selection
     // change listeners if the EditorView has been destroyed.
     if (
       view instanceof ReactEditorView &&
+      !isMounting &&
       !view.isDestroyed &&
       view.domSelection()
     ) {
@@ -141,6 +160,7 @@ export function useEditor<T extends HTMLElement = HTMLElement>(
     }
   });
 
+  if (view instanceof ReactEditorView) view.pendingMounting = isMounting;
   view.update(directEditorProps);
 
   const editor = useMemo(
@@ -154,5 +174,5 @@ export function useEditor<T extends HTMLElement = HTMLElement>(
     [options.static, registerEventListener, unregisterEventListener, view]
   );
 
-  return { editor, state };
+  return { editor, state, mountedChildCount, isMounting };
 }

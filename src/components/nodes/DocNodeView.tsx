@@ -22,6 +22,8 @@ export interface DocNodeViewProps extends Omit<HTMLProps<HTMLElement>, "as"> {
   decorations: readonly Decoration[];
   innerDecorations: DecorationSource;
   setMount: (mount: HTMLElement | null) => void;
+  mountedChildCount?: number;
+  isMounting?: boolean;
 }
 
 export const DocNodeView = memo(
@@ -33,6 +35,8 @@ export const DocNodeView = memo(
       decorations,
       innerDecorations,
       setMount,
+      mountedChildCount,
+      isMounting,
       ...elementProps
     },
     ref
@@ -74,12 +78,14 @@ export const DocNodeView = memo(
           getPos={getPos}
           node={node}
           innerDecorations={innerDecorations}
+          mountedChildCount={mountedChildCount}
         />
       </ChildDescriptionsContext.Provider>
     );
 
     const props = {
       ...elementProps,
+      ...(isMounting ? { "aria-busy": true } : {}),
       suppressContentEditableWarning: true,
       ref: innerRef,
     } satisfies HTMLProps<HTMLElement>;

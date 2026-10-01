@@ -418,18 +418,47 @@ export const ChildNodeViews = memo(function ChildNodeViews({
   getPos,
   node,
   innerDecorations,
+  mountedChildCount,
 }: {
   getPos: () => number;
   node: Node | undefined;
   innerDecorations: DecorationSource;
+  mountedChildCount?: number;
 }) {
   const { view } = useContext(EditorContext);
 
   const getInnerPos = useCallback(() => getPos() + 1, [getPos]);
 
   const childMap = useRef(new Map<string, Child>()).current;
+  const cacheRef = useRef<{
+    node: Node;
+    decorations: DecorationSource;
+    posToKey: Map<number, string> | undefined;
+    count: number;
+    offset: number;
+    elements: ReactNode[];
+  }>();
 
   if (!node) return null;
+
+  if (mountedChildCount === undefined || node.inlineContent) {
+    cacheRef.current = undefined;
+  }
+
+  const count = mountedChildCount ?? node.childCount;
+  const posToKey = reactKeysPluginKey.getState(view.state)?.posToKey;
+  const cached = cacheRef.current;
+  // During progressive mounting the document and decorations are unchanged.
+  // Reuse the committed prefix and only describe/render the newly exposed range.
+  const extending =
+    mountedChildCount !== undefined &&
+    !node.inlineContent &&
+    cached?.node === node &&
+    cached.decorations === innerDecorations &&
+    cached.posToKey === posToKey &&
+    cached.count <= count;
+  if (extending && cached.count === count) return <>{cached.elements}</>;
+  let endOffset = extending ? cached.offset : 0;
 
   const keysSeen = new Map<string, number>();
 
@@ -501,6 +530,7 @@ export const ChildNodeViews = memo(function ChildNodeViews({
       );
     },
     (childNode, outerDeco, innerDeco, offset, index) => {
+      endOffset = offset + childNode.nodeSize;
       const posToKey = reactKeysPluginKey.getState(view.state)?.posToKey;
       const key = createKey(getInnerPos(), offset, index, "node", posToKey);
       const child = {
@@ -524,20 +554,23 @@ export const ChildNodeViews = memo(function ChildNodeViews({
       keysSeen.set(key, keysSeen.size);
       adjustWidgetMarksBack(widgetChildren, lastNodeChild);
       widgetChildren = [];
-    }
+    },
+    count,
+    extending ? cached.count : 0,
+    extending ? cached.offset : 0
   );
 
-  for (const key of childMap.keys()) {
-    if (!keysSeen.has(key)) {
-      childMap.delete(key);
+  if (!extending) {
+    for (const key of childMap.keys()) {
+      if (!keysSeen.has(key)) {
+        childMap.delete(key);
+      }
     }
   }
 
-  const children = Array.from(childMap.values()).sort(
-    // We already ensured that these existed in keysSeen in the previous
-    // step
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    (a, b) => keysSeen.get(a.key)! - keysSeen.get(b.key)!
+  const children = Array.from(
+    keysSeen.keys(),
+    (key) => childMap.get(key) as Child
   );
 
   if (node.isTextblock) {
@@ -572,7 +605,19 @@ export const ChildNodeViews = memo(function ChildNodeViews({
     }
   }
 
-  const childElements = createChildElements(children, getInnerPos);
+  const childElements = extending
+    ? cached.elements.concat(createChildElements(children, getInnerPos))
+    : createChildElements(children, getInnerPos);
+  if (mountedChildCount !== undefined && !node.inlineContent) {
+    cacheRef.current = {
+      node,
+      decorations: innerDecorations,
+      posToKey,
+      count,
+      offset: endOffset,
+      elements: childElements,
+    };
+  }
 
   return <>{childElements}</>;
 });
