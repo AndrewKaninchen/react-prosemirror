@@ -11,7 +11,7 @@ import { useEditorEffect } from "./useEditorEffect.js";
 function assertIsReactEditorView(
   view: AbstractEditorView
 ): asserts view is ReactEditorView {
-  if (view instanceof ReactEditorView) {
+  if (view instanceof ReactEditorView && !view.mounting) {
     return;
   }
 

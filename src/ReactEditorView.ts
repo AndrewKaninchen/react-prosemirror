@@ -11,6 +11,35 @@ import { EMPTY_STATE } from "./constants.js";
 import { DOMNode, DOMSelection, DOMSelectionRange } from "./dom.js";
 import { NodeViewDesc, ViewDesc } from "./viewdesc.js";
 
+const mountingEvents = [
+  "keydown",
+  "keyup",
+  "keypress",
+  "beforeinput",
+  "input",
+  "mousedown",
+  "mouseup",
+  "click",
+  "dblclick",
+  "contextmenu",
+  "pointerdown",
+  "touchstart",
+  "touchend",
+  "focus",
+  "blur",
+  "compositionstart",
+  "compositionupdate",
+  "compositionend",
+  "paste",
+  "cut",
+  "copy",
+  "dragstart",
+  "dragend",
+  "dragenter",
+  "dragover",
+  "drop",
+];
+
 function buildNodeViews(view: ReactEditorView) {
   const result: NodeViewSet = Object.create(null);
   function add(obj: NodeViewSet) {
@@ -110,7 +139,16 @@ export class ReactEditorView extends EditorView implements AbstractEditorView {
 
   public cursorWrapped: boolean;
 
-  constructor(place: { mount: HTMLElement }, props: DirectEditorProps) {
+  public mounting: boolean;
+  public pendingMounting: boolean;
+
+  private readonly blockMountingEvent: (event: Event) => void;
+
+  constructor(
+    place: { mount: HTMLElement },
+    props: DirectEditorProps,
+    mounting = false
+  ) {
     // Prevent the base class from destroying the React-managed nodes.
     // Restore them below after invoking the base class constructor.
     const reactContent = [...place.mount.childNodes];
@@ -136,7 +174,7 @@ export class ReactEditorView extends EditorView implements AbstractEditorView {
         // in Safari, even updating the selection to the same
         // position it's already set to will end the current
         // composition.
-        if (this.composing) return;
+        if (this.composing || this.mounting) return;
         originalOnSelectionChange();
       };
     } finally {
@@ -163,6 +201,19 @@ export class ReactEditorView extends EditorView implements AbstractEditorView {
     this.docView = null;
     this._destroyed = false;
     this.cursorWrapped = false;
+    this.mounting = mounting;
+    this.pendingMounting = mounting;
+    this.blockMountingEvent = (event: Event) => {
+      if (!this.mounting) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    for (const type of mountingEvents) {
+      this.dom.addEventListener(type, this.blockMountingEvent, {
+        capture: true,
+        passive: false,
+      });
+    }
   }
 
   get props() {
@@ -203,10 +254,9 @@ export class ReactEditorView extends EditorView implements AbstractEditorView {
       }
     }
 
-    this.editable = !this.someProp(
-      "editable",
-      (value) => value(this.state) === false
-    );
+    this.editable =
+      !this.pendingMounting &&
+      !this.someProp("editable", (value) => value(this.state) === false);
   }
 
   updateState(state: EditorState) {
@@ -261,6 +311,9 @@ export class ReactEditorView extends EditorView implements AbstractEditorView {
   }
 
   destroy() {
+    for (const type of mountingEvents) {
+      this.dom.removeEventListener(type, this.blockMountingEvent, true);
+    }
     // Prevent the base class from destroying the React-managed nodes.
     // Restore them below after invoking the base class method.
     const reactContent = [...this.dom.childNodes];
@@ -284,6 +337,7 @@ export class ReactEditorView extends EditorView implements AbstractEditorView {
    * the node view set is up to date so that it does not try to redraw.
    */
   commitPendingEffects() {
+    if (this.mounting) return;
     // This class tracks state eagerly but the base class does it lazily.
     // Temporarily roll it back so the base class can handle the updates.
     this.state = this.prevState;

@@ -5,6 +5,7 @@ import {
   ChildDescriptionsContextValue,
 } from "../contexts/ChildDescriptionsContext.js";
 import { EditorContext } from "../contexts/EditorContext.js";
+import { EditorMountingContext } from "../contexts/EditorMountingContext.js";
 import { EditorStateContext } from "../contexts/EditorStateContext.js";
 import {
   NodeViewContext,
@@ -52,7 +53,10 @@ function ProseMirrorInner({
 }: Props) {
   const [mount, setMount] = useState<HTMLElement | null>(null);
 
-  const { editor, state } = useEditor(mount, props);
+  const { editor, state, mountedChildCount, isMounting } = useEditor(
+    mount,
+    props
+  );
 
   const nodeViewConstructors = editor.view.nodeViews;
   const nodeViewContextValue = useMemo<NodeViewContextValue>(() => {
@@ -72,25 +76,29 @@ function ProseMirrorInner({
       getPos,
       decorations,
       innerDecorations,
+      mountedChildCount,
+      isMounting,
     }),
-    [node, decorations, innerDecorations]
+    [node, decorations, innerDecorations, mountedChildCount, isMounting]
   );
 
   return (
     <EditorContext.Provider value={editor}>
-      <EditorStateContext.Provider value={state}>
-        <EditorStateSelectorsProvider>
-          <NodeViewContext.Provider value={nodeViewContextValue}>
-            <ChildDescriptionsContext.Provider
-              value={rootChildDescriptionsContextValue}
-            >
-              <DocNodeViewContext.Provider value={docNodeViewContextValue}>
-                {children}
-              </DocNodeViewContext.Provider>
-            </ChildDescriptionsContext.Provider>
-          </NodeViewContext.Provider>
-        </EditorStateSelectorsProvider>
-      </EditorStateContext.Provider>
+      <EditorMountingContext.Provider value={isMounting}>
+        <EditorStateContext.Provider value={state}>
+          <EditorStateSelectorsProvider>
+            <NodeViewContext.Provider value={nodeViewContextValue}>
+              <ChildDescriptionsContext.Provider
+                value={rootChildDescriptionsContextValue}
+              >
+                <DocNodeViewContext.Provider value={docNodeViewContextValue}>
+                  {children}
+                </DocNodeViewContext.Provider>
+              </ChildDescriptionsContext.Provider>
+            </NodeViewContext.Provider>
+          </EditorStateSelectorsProvider>
+        </EditorStateContext.Provider>
+      </EditorMountingContext.Provider>
     </EditorContext.Provider>
   );
 }

@@ -79,6 +79,7 @@ import "prosemirror-view/style/prosemirror.css";
   - [Building node views with React](#building-node-views-with-react)
 - [API](#api)
   - [`ProseMirror`](#prosemirror)
+    - [Progressive initial mounting](#progressive-initial-mounting)
   - [`ProseMirrorDoc`](#prosemirrordoc)
   - [`useEditorState`](#useeditorstate)
   - [`useEditorEventCallback`](#useeditoreventcallback-1)
@@ -509,6 +510,7 @@ type ProseMirror = (
   props: DirectEditorProps &
     ({ defaultState: EditorState } | { state: EditorState }) & {
       children: ReactNode;
+      progressiveMount?: { batchSize?: number };
       nodeViewComponents?: {
         [nodeType: string]: ComponentType<NodeViewComponentProps>;
       };
@@ -547,6 +549,68 @@ export function ProseMirrorEditor() {
   );
 }
 ```
+
+#### Progressive initial mounting
+
+Large documents can opt into mounting their React node views over multiple
+animation frames:
+
+```tsx
+<ProseMirror
+  key={documentId}
+  defaultState={editorState}
+  progressiveMount={{ batchSize: 25 }}
+>
+  <LoadingIndicator />
+  <ProseMirrorDoc />
+</ProseMirror>;
+
+function LoadingIndicator() {
+  const mounting = useIsEditorMounting();
+  return mounting ? <span role="status">Loading document…</span> : null;
+}
+```
+
+Import `useIsEditorMounting` from `@handlewithcare/react-prosemirror`. Omitting
+`progressiveMount` preserves synchronous mounting. Its default `batchSize` is
+25; the value must be a positive safe integer. Documents with at most that many
+top-level children mount synchronously.
+
+The first batch appears immediately. Each subsequent batch is scheduled with
+`requestAnimationFrame` after the previous commit. Already mounted components
+stay mounted. While loading, the document has `contenteditable="false"` and
+`aria-busy="true"`, editor input is blocked, and selection synchronization,
+plugin view initialization/updates, and `useEditorEffect` callbacks wait for the
+complete DOM. `useEditorEventCallback` throws `InvalidStateError` if called
+before loading finishes; disable external editor controls with
+`useIsEditorMounting`. Ordinary React effects still run as their components
+mount.
+
+The full EditorState, plugin state, decorations, and selection are retained
+throughout loading. Completion restores the current `editable` prop and plugin
+policy, including any changes made while loading. Controlled document changes
+during loading cancel the old schedule and start from the new document.
+Unmounting cancels pending frames. After completion, editing stays synchronous;
+use a React `key` when switching documents to opt into progressive mounting
+again. `static` rendering always produces the full document synchronously. For
+full server-rendered document output, use static rendering or omit this option.
+
+Batches count **top-level children**, not descendant nodes or milliseconds. A
+large table, list, or expensive individual node view remains one indivisible
+mount and may still block a frame. Lower the batch size for expensive views.
+Loading also takes more wall-clock time, especially on low-refresh-rate
+displays; background tabs may pause animation frames. Plugin view initialization
+and deferred editor effects still execute together at completion. Custom
+node-view constructors must avoid DOM queries outside their own subtree while
+loading.
+
+This approach preserves the editor's normal DOM after loading. Viewport
+virtualization would require additional handling for off-screen selection,
+coordinate queries, browser search, and native editing. React transitions can
+interrupt rendering, but cannot split a single large DOM commit into smaller
+commits. See the
+[benchmark and design notes](benchmarks/progressive-mount/README.md) for
+measurements and remaining limits.
 
 ### `ProseMirrorDoc`
 

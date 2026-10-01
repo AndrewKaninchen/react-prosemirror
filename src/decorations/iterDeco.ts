@@ -36,13 +36,16 @@ export function iterDeco(
     innerDeco: DecorationSource,
     offset: number,
     index: number
-  ) => void
+  ) => void,
+  childCount = parent.childCount,
+  fromIndex = 0,
+  fromOffset = 0
 ) {
   const locals = (deco as InternalDecorationSource).locals(parent);
-  let offset = 0;
+  let offset = fromOffset;
   // Simple, cheap variant for when there are no local decorations
   if (locals.length == 0) {
-    for (let i = 0; i < parent.childCount; i++) {
+    for (let i = fromIndex; i < childCount; i++) {
       const child = parent.child(i);
       onNode(
         child,
@@ -57,9 +60,14 @@ export function iterDeco(
   }
 
   let decoIndex = 0;
+  while (decoIndex < locals.length && locals[decoIndex]!.to < offset)
+    decoIndex++;
   const active = [];
   let restNode = null;
-  for (let parentIndex = 0; ; ) {
+  for (let parentIndex = fromIndex; ; ) {
+    // The next batch owns widgets at its start. Include end-of-document
+    // widgets only when the whole document is mounted.
+    if (parentIndex >= childCount && childCount < parent.childCount) break;
     if (decoIndex < locals.length && locals[decoIndex]!.to == offset) {
       let widget;
       let widgets;

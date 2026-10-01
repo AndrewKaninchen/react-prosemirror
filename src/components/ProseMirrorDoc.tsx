@@ -16,6 +16,8 @@ interface DocNodeViewContextValue {
   decorations: readonly Decoration[];
   innerDecorations: DecorationSource;
   setMount: (mount: HTMLElement | null) => void;
+  mountedChildCount?: number;
+  isMounting?: boolean;
 }
 
 export const DocNodeViewContext = createContext<DocNodeViewContextValue>(
